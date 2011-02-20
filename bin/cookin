@@ -1,8 +1,17 @@
 #!/usr/bin/env ruby
 
 require 'cool.io'
+require 'yajl'
 
 class TwitterClient < Cool.io::HttpClient
+  def self.connect
+    super 'stream.twitter.com', 80
+  end
+
+  def request
+    super 'GET', '/1/statuses/sample.json', :head=>{ 'Authorization'=>"Basic #{ENV['B64_TWITTER_CREDS']}", 'Accept'=>'*/*', 'Connection'=>'keep-alive'}
+  end
+
   def on_connect
     super
     $stderr.puts "connected"
@@ -12,12 +21,14 @@ class TwitterClient < Cool.io::HttpClient
     super
     $stderr.puts "response #{header.http_version} #{header.status} #{header.http_reason}"
     $stderr.puts header.inspect
+    @yajl = Yajl::Parser.new(:symbolize_keys=>true)
+    @yajl.on_parse_complete = method(:on_tweet)
+    $stderr.puts "yajl started"
   end
 
   def on_body_data(data)
     super
-    $stderr.write data
-    $stderr.flush
+    @yajl << data
   end
 
   def on_error(reason)
@@ -30,14 +41,12 @@ class TwitterClient < Cool.io::HttpClient
     $stderr.puts "all done"
   end
 
-  def write(*data, &proc)
-    $stderr.write data
-    $stderr.flush
-    super(*data, &proc)
+  def on_tweet(tweet)
+    $stderr.puts tweet.inspect
   end
 end
 
 loop = Cool.io::Loop.default
-client = TwitterClient.connect('stream.twitter.com', 80).attach(loop)
-client.request('GET', '/1/statuses/sample.json', :head=>{ 'Authorization'=>"Basic #{ENV['B64_TWITTER_CREDS']}", 'Accept'=>'*/*', 'Connection'=>'keep-alive'})
+client = TwitterClient.connect.attach(loop)
+client.request
 loop.run
