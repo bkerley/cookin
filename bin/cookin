@@ -12,28 +12,14 @@ class TwitterClient < Cool.io::HttpClient
     super 'GET', '/1/statuses/sample.json', :head=>{ 'Authorization'=>"Basic #{ENV['B64_TWITTER_CREDS']}", 'Accept'=>'*/*', 'Connection'=>'keep-alive'}
   end
 
-  def on_connect
-    super
-    $stderr.puts "connected"
-  end
-
   def on_response_header(header)
     super
-    $stderr.puts "response #{header.http_version} #{header.status} #{header.http_reason}"
-    $stderr.puts header.inspect
     @yajl = Yajl::Parser.new(:symbolize_keys=>true)
-    @yajl.on_parse_complete = method(:on_tweet)
-    $stderr.puts "yajl started"
+    @yajl.on_parse_complete = method(:on_element)
   end
 
   def on_body_data(data)
-    super
     @yajl << data
-  end
-
-  def on_error(reason)
-    super
-    $stderr.puts reason
   end
 
   def on_request_complete
@@ -41,8 +27,19 @@ class TwitterClient < Cool.io::HttpClient
     $stderr.puts "all done"
   end
 
+  def on_element(element)
+    return on_delete(element[:delete]) if element[:delete]
+    return on_tweet(element)
+  rescue NoMethodError => e
+    $stderr.puts "UNEXPECTED #{element.inspect}"
+  end
+
+  def on_delete(deletion)
+    $stderr.puts "Redacting tweet #{deletion[:status][:id]} from #{deletion[:status][:user_id]}"
+  end
+
   def on_tweet(tweet)
-    $stderr.puts tweet.inspect
+    $stdout.puts "#{tweet[:user][:name]} (#{tweet[:user][:screen_name]}): #{tweet[:text]}"
   end
 end
 
