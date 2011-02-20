@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+
+require 'cool.io'
+
+class TwitterClient < Cool.io::HttpClient
+  def on_connect
+    super
+    $stderr.puts "connected"
+  end
+
+  def on_response_header(header)
+    super
+    $stderr.puts "response #{header.http_version} #{header.status} #{header.http_reason}"
+    $stderr.puts header.inspect
+  end
+
+  def on_body_data(data)
+    super
+    $stderr.write data
+    $stderr.flush
+  end
+
+  def on_error(reason)
+    super
+    $stderr.puts reason
+  end
+
+  def on_request_complete
+    super
+    $stderr.puts "all done"
+  end
+
+  def write(*data, &proc)
+    $stderr.write data
+    $stderr.flush
+    super(*data, &proc)
+  end
+end
+
+loop = Cool.io::Loop.default
+client = TwitterClient.connect('stream.twitter.com', 80).attach(loop)
+client.request('GET', '/1/statuses/sample.json', :head=>{ 'Authorization'=>"Basic #{ENV['B64_TWITTER_CREDS']}", 'Accept'=>'*/*', 'Connection'=>'keep-alive'})
+loop.run
